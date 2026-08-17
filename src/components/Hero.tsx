@@ -16,7 +16,7 @@ export default function Hero() {
   })
 
   // image scales from 1 -> 1.15 as the section scrolls past
-  const imageScale = useTransform(scrollYProgress, [0, 1], [1, 1.15])
+  const imageScale = useTransform(scrollYProgress, [0, 1], [1, 3])
 
   return (
     <section ref={sectionRef} className="h-screen p-4 md:p-6">

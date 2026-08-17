@@ -4,6 +4,7 @@ import {
   motion,
   useInView,
   useMotionValue,
+  useTransform,
   useDragControls,
   animate as animateValue,
   type PanInfo,
@@ -20,7 +21,7 @@ const GALLERY_ITEMS = [
     description:
       'A 72-hours sprint with the team, way too much thinking & debugging, and a scramble to ship a working demo before the deadline. Walking away with 2nd place made every sleepless hour worth it.',
     extendedDescription:
-      'We pivoted our idea twice in the first 12 hours after realizing our original scope was way too ambitious for the timeframe. What actually saved us was splitting into two pairs , one on the core logic, one on the demo/UI , and syncing every 3 hours instead of trying to work in one big group.',
+      'We pivoted our idea twice in the first 12 hours after realizing our original scope was way too ambitious for the timeframe. What actually saved us was splitting into two pairs — one on the core logic, one on the demo/UI — and syncing every 3 hours instead of trying to work in one big group.',
     span: 'sm:row-span-2',
   },
   {
@@ -178,6 +179,12 @@ function GalleryCard({
   )
 }
 
+// Snap points, in px, relative to the sheet's resting (collapsed) position.
+// Negative = lifted up (expanded), positive = dragged down (toward dismiss).
+const SNAP_EXPANDED = -170
+const SNAP_COLLAPSED = 0
+const SNAP_DISMISS = 220
+
 function GalleryModal({
   item,
   onClose,
@@ -187,37 +194,52 @@ function GalleryModal({
 }) {
   const [loaded, setLoaded] = useState(false)
   const [errored, setErrored] = useState(false)
-  const [expanded, setExpanded] = useState(false)
 
-  // motion value drives the drag gesture only; once released we snap it back
-  // to 0 and let `expanded` state control the actual layout via `layout` animations
-  const y = useMotionValue(0)
+  // y follows the drag gesture continuously — nothing is binary while dragging.
+  const y = useMotionValue(SNAP_COLLAPSED)
   const dragControls = useDragControls()
+  const isDraggingRef = useRef(false)
 
-  const UP_THRESHOLD_OFFSET = -60
-  const UP_THRESHOLD_VELOCITY = -450
-  const DOWN_COLLAPSE_OFFSET = 70
-  const DOWN_COLLAPSE_VELOCITY = 450
-  const DOWN_CLOSE_OFFSET = 120
-  const DOWN_CLOSE_VELOCITY = 800
+  // 0 -> 1 as the sheet travels from collapsed to fully expanded.
+  const liftProgress = useTransform(y, [SNAP_EXPANDED, SNAP_COLLAPSED], [1, 0], {
+    clamp: true,
+  })
+  // 0 -> 1 as the sheet travels from collapsed toward the dismiss point.
+  const dismissProgress = useTransform(y, [SNAP_COLLAPSED, SNAP_DISMISS], [0, 1], {
+    clamp: true,
+  })
+
+  const extendedOpacity = useTransform(liftProgress, [0, 0.35, 1], [0, 0, 1])
+  const extendedMaxHeight = useTransform(liftProgress, [0, 1], [0, 240])
+  const imageAspect = useTransform(liftProgress, [0, 1], [1.333, 1.6]) // 4/3 -> 16/10
+  const handleRotate = useTransform(liftProgress, [0, 1], [0, 180])
+  const sheetOpacity = useTransform(dismissProgress, [0, 1], [1, 0.4])
+  const backdropOpacity = useTransform(dismissProgress, [0, 1], [1, 0.3])
+
+  const snapTo = (target: number) => {
+    animateValue(y, target, { type: 'spring', stiffness: 420, damping: 40 })
+  }
 
   const handleDragEnd = (_: PointerEvent, info: PanInfo) => {
-    const { offset, velocity } = info
+    isDraggingRef.current = false
+    const current = y.get()
+    // Bias the resting point using velocity, like a real sheet: a fast
+    // flick commits to the next snap point even from a small offset.
+    const projected = current + info.velocity.y * 0.15
 
-    if (!expanded) {
-      if (offset.y < UP_THRESHOLD_OFFSET || velocity.y < UP_THRESHOLD_VELOCITY) {
-        setExpanded(true)
-      } else if (offset.y > DOWN_CLOSE_OFFSET || velocity.y > DOWN_CLOSE_VELOCITY) {
-        onClose()
-        return
-      }
-    } else {
-      if (offset.y > DOWN_COLLAPSE_OFFSET || velocity.y > DOWN_COLLAPSE_VELOCITY) {
-        setExpanded(false)
-      }
+    const candidates = [SNAP_EXPANDED, SNAP_COLLAPSED, SNAP_DISMISS]
+    const nearest = candidates.reduce((closest, point) =>
+      Math.abs(point - projected) < Math.abs(closest - projected) ? point : closest
+    )
+
+    if (nearest === SNAP_DISMISS) {
+      // Let it fly off then unmount.
+      animateValue(y, 420, { type: 'spring', stiffness: 380, damping: 38 })
+      setTimeout(onClose, 180)
+      return
     }
 
-    animateValue(y, 0, { type: 'spring', stiffness: 500, damping: 45 })
+    snapTo(nearest)
   }
 
   return (
@@ -230,10 +252,8 @@ function GalleryModal({
     >
       <motion.div
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        style={{ opacity: backdropOpacity }}
         onClick={onClose}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
       />
       <div className="bg-noise absolute inset-0 opacity-[0.15] pointer-events-none" />
 
@@ -244,54 +264,57 @@ function GalleryModal({
         drag="y"
         dragControls={dragControls}
         dragListener={false}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0.6, bottom: 0.3 }}
+        dragConstraints={{ top: SNAP_EXPANDED, bottom: SNAP_DISMISS }}
+        dragElastic={{ top: 0.15, bottom: 0.25 }}
+        onDragStart={() => (isDraggingRef.current = true)}
         onDragEnd={handleDragEnd}
-        style={{ y }}
-        layout
-        className="relative w-full sm:w-auto sm:max-w-2xl max-h-[92vh] sm:max-h-[85vh] bg-[#0c0c0c] border border-white/5 rounded-t-3xl sm:rounded-2xl overflow-hidden flex flex-col"
-        initial={{ y: '100%', opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: '100%', opacity: 0 }}
+        style={{ y, opacity: sheetOpacity }}
+        className="relative w-full sm:w-auto sm:max-w-2xl max-h-[92vh] sm:max-h-[85vh] bg-[#0c0c0c] border border-white/5 rounded-t-3xl sm:rounded-2xl overflow-hidden flex flex-col touch-none sm:touch-auto"
+        initial={{ y: 400, opacity: 0 }}
+        animate={{ y: SNAP_COLLAPSED, opacity: 1 }}
+        exit={{ y: 400, opacity: 0 }}
         transition={{ duration: 0.4, ease: CARD_EASE }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Drag handle — mobile only. Tap toggles, drag lifts/lowers the sheet. */}
+        {/* Drag handle — grab anywhere on the header strip or image to lift the sheet. */}
         <div
           className="sm:hidden flex flex-col items-center pt-3 pb-1.5 shrink-0 gap-1 cursor-grab active:cursor-grabbing touch-none select-none"
           onPointerDown={(e) => dragControls.start(e)}
-          onClick={() => setExpanded((prev) => !prev)}
         >
           <div className="h-1 w-10 rounded-full bg-white/20" />
-          <ChevronUp
-            className={`w-3.5 h-3.5 text-gray-500 transition-transform duration-300 ${
-              expanded ? 'rotate-180' : ''
-            }`}
-          />
+          <motion.div style={{ rotate: handleRotate }}>
+            <ChevronUp className="w-3.5 h-3.5 text-gray-500" />
+          </motion.div>
         </div>
 
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/60 border border-white/10 backdrop-blur-sm flex items-center justify-center text-gray-300 hover:text-primary hover:border-primary/40 transition-colors"
+          className="absolute top-1 right-3 sm:top-6 sm:right-4 z-10 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/60 border border-white/10 backdrop-blur-sm flex items-center justify-center text-gray-300 hover:text-primary hover:border-primary/40 transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
 
-        <div className="overflow-y-auto">
+        <div className="overflow-y-auto overscroll-contain">
+          {/* Image area also acts as a drag handle on mobile, so lifting the
+              card doesn't require hunting for the tiny pill up top. */}
           <motion.div
-            layout
-            className={`relative w-full bg-[#141414] transition-[aspect-ratio] duration-500 ${
-              expanded ? 'aspect-[16/10] sm:aspect-[16/10]' : 'aspect-[4/3] sm:aspect-[16/10]'
-            }`}
-            transition={{ duration: 0.5, ease: CARD_EASE }}
+            onPointerDown={(e) => {
+              // only start a sheet-drag from here on touch/mobile widths;
+              // desktop pointer users shouldn't have image clicks hijacked
+              if (window.matchMedia('(max-width: 639px)').matches) {
+                dragControls.start(e)
+              }
+            }}
+            className="relative w-full bg-[#141414] touch-none sm:touch-auto"
+            style={{ aspectRatio: imageAspect }}
           >
             {!errored && (
               <img
                 src={`${item.file}`}
                 alt={item.caption}
-                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 pointer-events-none ${
                   loaded ? 'opacity-100' : 'opacity-0'
                 }`}
                 onLoad={() => setLoaded(true)}
@@ -305,10 +328,10 @@ function GalleryModal({
               </div>
             )}
 
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c0c] via-transparent to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c0c] via-transparent to-transparent pointer-events-none" />
           </motion.div>
 
-          <motion.div layout className="px-5 py-5 sm:px-8 sm:py-7">
+          <div className="px-5 py-5 sm:px-8 sm:py-7">
             <p className="text-sm sm:text-base font-medium text-primary/90 mb-2 sm:mb-3">
               {item.caption}
             </p>
@@ -316,21 +339,17 @@ function GalleryModal({
               {item.description}
             </p>
 
-            <AnimatePresence>
-              {expanded && item.extendedDescription && (
-                <motion.p
-                  key="extended"
-                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                  animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
-                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                  transition={{ duration: 0.4, ease: CARD_EASE }}
-                  className="text-xs sm:text-sm text-gray-500 leading-relaxed overflow-hidden"
-                >
+            {item.extendedDescription && (
+              <motion.div
+                style={{ maxHeight: extendedMaxHeight, opacity: extendedOpacity }}
+                className="overflow-hidden"
+              >
+                <p className="text-xs sm:text-sm text-gray-500 leading-relaxed mt-3">
                   {item.extendedDescription}
-                </motion.p>
-              )}
-            </AnimatePresence>
-          </motion.div>
+                </p>
+              </motion.div>
+            )}
+          </div>
         </div>
       </motion.div>
     </motion.div>

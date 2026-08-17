@@ -72,7 +72,7 @@ export default function Projects() {
           className="relative rounded-2xl overflow-hidden bg-[#101010] p-6 sm:p-7 flex flex-col justify-between h-full"
         >
           <img
-            src="night.jpeg"
+            src="Card.png"
             alt=""
             className="absolute inset-0 w-full h-full object-cover"
             onError={(e) => {
