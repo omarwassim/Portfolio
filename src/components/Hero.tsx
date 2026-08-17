@@ -1,5 +1,6 @@
-import { motion } from 'framer-motion'
+import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
+import { useRef } from 'react'
 import Navbar from './Navbar'
 import WordsPullUp from './WordsPullUp'
 import CircuitBackground from './CircuitBackground'
@@ -7,15 +8,26 @@ import CircuitBackground from './CircuitBackground'
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1]
 
 export default function Hero() {
+  const sectionRef = useRef<HTMLElement>(null)
+
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ['start start', 'end start'], // tracks scroll from top of section to when it scrolls out of view
+  })
+
+  // image scales from 1 -> 1.15 as the section scrolls past
+  const imageScale = useTransform(scrollYProgress, [0, 1], [1, 1.15])
+
   return (
-    <section className="h-screen p-4 md:p-6">
+    <section ref={sectionRef} className="h-screen p-4 md:p-6">
       <div className="relative w-full h-full rounded-2xl md:rounded-[2rem] overflow-hidden">
         <CircuitBackground />
 
-        <img
+        <motion.img
           src="/Hero.png"
           alt="Omar Wassim Mohamed"
           className="absolute inset-0 w-full h-full object-cover object-top"
+          style={{ scale: imageScale }}
           onError={(e) => {
             e.currentTarget.style.display = 'none'
           }}

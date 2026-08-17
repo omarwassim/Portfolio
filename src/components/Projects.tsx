@@ -1,6 +1,6 @@
 import { motion, useInView } from 'framer-motion'
 import { useRef } from 'react'
-import { ArrowRight, Bot, Check, GraduationCap, HeartPulse, Trophy ,Utensils, Share2 } from 'lucide-react'
+import { ArrowRight, Check, GraduationCap, HeartPulse, Trophy ,Utensils} from 'lucide-react'
 import WordsPullUpMultiStyle from './WordsPullUpMultiStyle'
 
 const CARD_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1]
@@ -72,7 +72,7 @@ export default function Projects() {
           className="relative rounded-2xl overflow-hidden bg-[#101010] p-6 sm:p-7 flex flex-col justify-between h-full"
         >
           <img
-            src="Calm.png"
+            src="night.jpeg"
             alt=""
             className="absolute inset-0 w-full h-full object-cover"
             onError={(e) => {
