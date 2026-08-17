@@ -13,7 +13,7 @@ export default function Hero() {
         <CircuitBackground />
 
         <img
-          src="../../public/Hero.png"
+          src="/Hero.png"
           alt="Omar Wassim Mohamed"
           className="absolute inset-0 w-full h-full object-cover object-top"
           onError={(e) => {

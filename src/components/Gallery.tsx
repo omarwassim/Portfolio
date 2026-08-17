@@ -130,7 +130,7 @@ function GalleryCard({
     >
       {!errored && (
         <img
-          src={`../../public/${item.file}`}
+          src={`${item.file}`}
           alt={item.caption}
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
             loaded ? 'opacity-100' : 'opacity-0'
@@ -213,7 +213,7 @@ function GalleryModal({
           <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] bg-[#141414]">
             {!errored && (
               <img
-                src={`../../public/${item.file}`}
+                src={`${item.file}`}
                 alt={item.caption}
                 className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
                   loaded ? 'opacity-100' : 'opacity-0'
